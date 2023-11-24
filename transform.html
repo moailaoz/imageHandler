@@ -1,0 +1,452 @@
+<!--
+ * @Description: 
+ * @Date: 2022-03-16 15:11:47
+ * @LastEditTime: 2023-11-24 17:46:41
+ * @FilePath: \example-demo\imageHandler\transform.html
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>图像处理-去除纯色背景</title>
+    <!-- <link rel="stylesheet" href="tailwind.css"> -->
+    <!-- jszip.js -->
+    <script
+      src="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/jszip/3.7.1/jszip.min.js"
+      type="application/javascript"
+    ></script>
+
+    <!-- FileSaver.js -->
+    <script
+      src="https://lf26-cdn-tos.bytecdntp.com/cdn/expire-1-M/FileSaver.js/2014-08-29/FileSaver.min.js"
+      type="application/javascript"
+    ></script>
+    <link rel="stylesheet" href="/imageHandler/index.css" />
+  </head>
+  <style lang="">
+    body {
+      margin: 0;
+      background: #efefef;
+    }
+
+    .main {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      flex-direction: column;
+    }
+
+    .header {
+      width: 800px;
+    }
+
+    .content {
+      max-width: 1200px;
+    }
+
+    canvas {
+      /* background: #fff; */
+      margin-left: 20px;
+      max-width: 600px;
+    }
+
+    .btn + .btn {
+      margin-left: 20px;
+    }
+
+    #multipleDown {
+      display: none;
+    }
+  </style>
+
+  <body>
+    <div class="main font-sans">
+      <div class="dialog hidden" onclick="hideDialog()">
+        <div class="dialog-content"></div>
+      </div>
+      <div class="header mt-8 p-8 bg-white shadow">
+        <div class="title font-bold text-xl">参数配置</div>
+        <div class="panel flex justify-between">
+          <div class="left space-y-4 py-4">
+            <div class="tips">转换前的颜色</div>
+            <input
+              id="l1"
+              type="text"
+              placeholder="请输入r通道数值"
+              value="255"
+              class="input"
+            />
+            <input
+              id="l2"
+              type="text"
+              placeholder="请输入g通道数值"
+              value="255"
+              class="input"
+            />
+            <input
+              id="l3"
+              type="text"
+              placeholder="请输入b通道数值"
+              value="255"
+              class="input"
+            />
+            <div class="type flex space-x-2">
+              <div class="radio-item">
+                <input type="radio" name="equal" id="radio1" checked /><label
+                  for="radio1"
+                  >等于</label
+                >
+              </div>
+              <div class="radio-item">
+                <input type="radio" name="equal" id="radio2" /><label
+                  for="radio2"
+                  >大于</label
+                >
+              </div>
+              <div class="radio-item">
+                <input type="radio" name="equal" id="radio3" />
+                <label for="radio3">小于</label>
+              </div>
+            </div>
+
+            <input
+              type="file"
+              multiple
+              name="file"
+              id="file"
+              onchange="onFile(this)"
+            />
+          </div>
+          <div class="right space-y-4 py-4">
+            <div class="tips">转换后的颜色</div>
+            <input
+              id="r1"
+              type="text"
+              placeholder="请输入r通道数值"
+              value="255"
+              class="input"
+            />
+            <input
+              id="r2"
+              type="text"
+              placeholder="请输入g通道数值"
+              value="255"
+              class="input"
+            />
+            <input
+              id="r3"
+              type="text"
+              placeholder="请输入b通道数值"
+              value="255"
+              class="input"
+            />
+            <input
+              id="r4"
+              type="text"
+              placeholder="请输入a通道数值"
+              value="0"
+              class="input"
+            />
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button class="btn" id="multipleDown" onclick="multipleDown()">
+            批量下载
+          </button>
+          <button class="btn" onclick="transformPicture()">确认</button>
+        </div>
+      </div>
+      <div class="content w-full flex justify-center mt-4">
+        <canvas id="canvas" onclick="sel(this, event)"></canvas>
+        <canvas id="c2"></canvas>
+      </div>
+    </div>
+  </body>
+  <script>
+    const beforeInputs = new Array(4).fill(0);
+    const afterInputs = new Array(4).fill(0);
+    const dialog = document.querySelector(".dialog");
+    const downloadBtn = document.querySelector("#multipleDown");
+    const radios = new Array(3).fill(0);
+    const fileElement = document.querySelector("#file");
+    let cache = []; // 文件缓存
+    for (let i = 1; i <= 4; i++) {
+      beforeInputs[i - 1] = document.querySelector("#l" + i);
+      afterInputs[i - 1] = document.querySelector("#r" + i);
+      if (i < 4) {
+        radios[i - 1] = document.querySelector("#radio" + i);
+      }
+    }
+
+    let config = {
+      before: [255, 255, 255],
+      after: [255, 255, 255, 0],
+    };
+
+    const state = new Proxy(config, {
+      set(t, p, v, r) {
+        t[p] = v;
+      },
+    });
+
+    function init() {}
+    const canvas1 = document.querySelector("#canvas");
+
+    const ctx1 = canvas.getContext("2d");
+
+    const c2 = document.querySelector("#c2");
+
+    const ctx2 = c2.getContext("2d");
+
+    function transformPicture() {
+      for (let i = 0; i < 4; i++) {
+        if (config.before[i] !== undefined) {
+          config.before[i] = Number(beforeInputs[i].value);
+        }
+
+        config.after[i] = Number(afterInputs[i].value);
+      }
+      draw();
+    }
+
+    /**
+     * @description:
+     * @param {HTMLCanvasElement} canvas
+     * @param {Event} t
+     * @return {*}
+     */
+    function sel(canvas, t) {
+      let poi = { x: 0, y: 0 };
+      poi.x = (t.offsetX / canvas.clientWidth) * canvas.width;
+      poi.y = (t.offsetY / canvas.clientHeight) * canvas.height;
+      const ctx = canvas.getContext("2d");
+      let color = ctx.getImageData(poi.x, poi.y, 1, 1, {
+        willReadFrequently: true,
+      });
+      const panel = dialog.querySelector(".dialog-content");
+      panel.innerHTML = `<div class="h-full flex justify-center items-center">当前位置颜色为rgba(${color.data.join()})</div>`;
+      dialog.classList.remove("hidden");
+    }
+    // draw();
+
+    function draw(index = 0) {
+      onFile(fileElement);
+    }
+
+    /**
+     * @description:
+     * @param {HTMLImageElement | string} img 原图
+     * @param {CanvasRenderingContext2D} ctx2
+     * @return {*}
+     */
+    function transformData(img) {
+      return new Promise((resolve, reject) => {
+        try {
+          if (typeof img === "string") {
+            const image = new Image();
+            image.onload = (e) => {
+              resolve(handleData(image));
+            };
+            image.src = img;
+          } else {
+            resolve(handleData(img));
+          }
+        } catch (error) {
+          reject(error);
+        }
+      });
+    }
+    /**
+     * @description:
+     * @param {HTMLImageElement | string} img
+     * @param {CanvasRenderingContext2D} ctx2
+     * @return {*}
+     */
+    function handleData(img) {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const context = canvas.getContext("2d");
+      context.drawImage(img, 0, 0);
+      let imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      let pixel = imageData.data;
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        let limit = judge(
+          [pixel[i], pixel[i + 1], pixel[i + 2]],
+          config.before
+        );
+        if (limit) {
+          imageData.data[i] = config.after[0];
+          imageData.data[i + 1] = config.after[1];
+          imageData.data[i + 2] = config.after[2];
+          let a = config.after[3]; //a通道上限为255，对应opacity的归一化数值
+          if (a <= 1 && a != 0) {
+            a = a * 255;
+          }
+          imageData.data[i + 3] = a;
+        }
+        // pixel[i] = 255 - pixel[i]
+        // pixel[i + 1] = 255 - pixel[i + 1]
+        // pixel[i + 2] = 255 - pixel[i + 2]
+      }
+      context.putImageData(imageData, 0, 0);
+      return canvas.toDataURL();
+    }
+
+    var count = 1;
+    function judge(color, target) {
+      let j = false;
+      let c = radios.find((i) => i.checked);
+      switch (c.id) {
+        case "radio1":
+          j =
+            color[0] === target[0] &&
+            color[1] === target[1] &&
+            color[2] === target[2];
+          break;
+        case "radio2":
+          j =
+            color[0] > target[0] &&
+            color[1] > target[1] &&
+            color[2] > target[2];
+          break;
+        case "radio3":
+          j =
+            color[0] < target[0] &&
+            color[1] < target[1] &&
+            color[2] < target[2];
+          break;
+        default:
+          return false;
+          break;
+      }
+      return j;
+    }
+
+    function hideDialog() {
+      dialog.classList.add("hidden");
+    }
+
+    /**
+     * @description: 文件选择器选择事件
+     * @param {HTMLInputElement} t
+     * @return {*}
+     */
+    function onFile(t) {
+      console.log(t.files);
+      let files = t.files;
+      const promises = [];
+      for (let index = 0; index < files.length; index++) {
+        const file = files.item(index);
+
+        promises.push(getImageInfo(file));
+      }
+      Promise.all(promises).then((imageList) => {
+        cache = imageList;
+        drawImageByCache();
+      });
+    }
+
+    function drawImageByCache() {
+      let imageList = cache;
+      let height = imageList.reduce((prev, curr) => {
+        // 加上文字高度
+        return prev + curr.height + 20;
+      }, 0);
+
+      let width = Math.max(...imageList.map((i) => i.width));
+      canvas1.width = width;
+      canvas1.height = height;
+      c2.width = width;
+      c2.height = height;
+      let drawY = 0;
+      imageList.forEach(async (info, index) => {
+        await transformData(info.base).then((res) => {
+          ctx1.strokeText(info.name, 10, drawY + 10);
+          ctx1.drawImage(info.img, 0, drawY + 20);
+          ctx2.strokeText(info.name, 10, drawY + 10);
+          ctx2.drawImage(info.img2, 0, drawY + 20);
+          drawY += info.height + 20;
+        });
+      });
+      if (imageList.length) {
+        downloadBtn.style.display = "block";
+      } else {
+        downloadBtn.style.display = "none";
+      }
+    }
+
+    function multipleDown() {
+      console.log("批量下载");
+      const zip = new JSZip();
+      cache.forEach((ite) => {
+        let base64 = ite.base2.split("base64,")?.[1];
+        zip.file(ite.name, base64, { base64: true });
+      });
+      zip.generateAsync({ type: "blob" }).then(function (content) {
+        // see FileSaver.js
+        saveAs(content, "example.zip");
+      });
+    }
+    /**
+     * @description:
+     * @param {File} file
+     * @return {Promise<{name: string;width:number;height: number;size: number;base:string;type: MIMEType;img:HTMLImageElement;img2:HTMLImageElement}>}
+     */
+    function getImageInfo(file = {}) {
+      return new Promise((resolve, reject) => {
+        try {
+          const imgInfo = {
+            name: file?.name,
+            size: file?.size,
+            type: file?.type,
+            width: 0,
+            height: 0,
+            base: "",
+            img: null,
+            img2: null,
+          };
+          if (!file) return resolve(imgInfo);
+          blobToDataURL(file, (base) => {
+            const img = new Image();
+            img.onload = () => {
+              imgInfo.width = img.width;
+              imgInfo.height = img.height;
+              imgInfo.base = base;
+              imgInfo.img = img;
+              transformData(base).then((res) => {
+                let pic = new Image();
+                pic.src = res;
+                pic.onload = () => {
+                  imgInfo.base2 = res;
+                  imgInfo.img2 = pic;
+                  resolve(imgInfo);
+                };
+              });
+            };
+            img.src = base;
+          });
+        } catch (error) {
+          reject(error);
+        }
+      });
+    }
+
+    /**
+     * @description: blob转base64
+     * @param {File} blob
+     * @param {{(base:string): void}} cb
+     * @return {*}
+     */
+    const blobToDataURL = (blob, cb) => {
+      let reader = new FileReader();
+      reader.onload = function (evt) {
+        let base64 = evt.target.result;
+        cb(base64);
+      };
+      reader.readAsDataURL(blob);
+    };
+  </script>
+</html>
